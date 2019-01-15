@@ -13,10 +13,27 @@ import (
 // You more than likely want your "Bot User OAuth Access Token" which starts with "xoxb-"
 var api = slack.New("TOKEN")
 
+// Signing Secret for your Slack App that uses to verifying request from Slack
+var signingSecret = "SIGNING SECRET"
+
 func main() {
 	http.HandleFunc("/events-endpoint", func(w http.ResponseWriter, r *http.Request) {
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(r.Body)
+
+		sv, err := slack.NewSecretsVerifier(r.Header, signingSecret)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+
+		if _, err := sv.Write(buf.Bytes()); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+
+		if err := sv.Ensure(); err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+
 		body := buf.String()
 		eventsAPIEvent, e := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionVerifyToken(&slackevents.TokenComparator{VerificationToken: "TOKEN"}))
 		if e != nil {
